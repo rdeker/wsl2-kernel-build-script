@@ -19,6 +19,40 @@ if [ "${EUID}" -eq '0' ]; then
 fi
 
 #
+# PARSE COMMANDLINE ARGUMENTS - DEKER
+#
+
+match_kern=0
+extra_opts=()
+prompt_answer=''
+while getopts 'v:o:' opt; do
+	case "$opt" in
+		v)
+		  arg="$OPTARG"
+		  echo "Building with kernel $ARG"
+		  if [ $arg -eq 5 ]; then
+			  prompt_answer="1"
+		  elif [ $arg -eq 6 ]; then
+			  prompt_answer="2"
+		  else
+			  echo "Kernel option ${arg} is not valid. Exiting."
+			  exit
+		  fi
+		  ;;
+		o)
+		  arg="$OPTARG"
+		  echo "Adding kernel config option $arg"
+		  extra_opts+=("$arg")
+		  
+		  ;;
+	esac
+done
+
+if [ ! -z ${prompt_answer}  ]; then
+	echo "Prompt answer: ${prompt_answer}"
+fi
+
+#
 # PROMPT THE USER TO CHOOSE THE KERNEL VERSION
 #
 
@@ -27,12 +61,16 @@ prompt_fn()
     local answer
     clear
 
-    printf "%s\n\n%s\n%s\n%s\n\n" \
-        'Choose the kernel version:' \
-        '[1] 5.15.133.1 (10.06.23)' \
-        '[2] 6.1.21.2 (07.25.23)' \
-        '[3] Exit'
-    read -p 'Your choices are (1 to 3): ' answer
+    if [ ! -z ${prompt_answer} ]; then
+	    answer=$prompt_answer
+    else
+        printf "%s\n\n%s\n%s\n%s\n\n" \
+            'Choose the kernel version:' \
+            '[1] 5.15.133.1 (10.06.23)' \
+            '[2] 6.1.21.2 (07.25.23)' \
+            '[3] Exit'
+        read -p 'Your choices are (1 to 3): ' answer
+    fi
     clear
 
     case "${answer}" in
@@ -127,6 +165,16 @@ fail_fn()
     exit 1
 }
 
+add_opts_fn()
+{
+    if [ ${#extra_opts} -ne 0 ]; then
+        for i in ${extra_opts[@]}; do
+	    echo "Adding kernel option ${i} to config"
+            echo "$i" >> ${archive_dir}/Microsoft/config-wsl
+        done
+    fi
+}
+
 #
 # INSTALL REQUIRED APT PACKAGES
 #
@@ -179,6 +227,9 @@ fi
 #
 # BUILD PROGRAM FROM SOURCE
 #
+
+# Add any extra kernel options
+add_opts_fn
 
 cd "${archive_dir}" || exit 1
 echo 'yes' | make "-j$(nproc --all)" KCONFIG_CONFIG='Microsoft/config-wsl'
